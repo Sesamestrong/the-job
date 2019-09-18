@@ -1,4 +1,4 @@
-module.exports=new Promise((resolve, reject) => {
+module.exports = new Promise((resolve, reject) => {
   const bcrypt = require("bcrypt");
   const mongoose = require("mongoose");
   const saltshaker = require("randomstring").generate;
@@ -15,7 +15,7 @@ module.exports=new Promise((resolve, reject) => {
   const db = mongoose.connection;
 
   //Model declaration go here
-  let User;
+  let User, Snip, UserRole;
 
   const {
     ObjectId
@@ -48,7 +48,7 @@ module.exports=new Promise((resolve, reject) => {
     const user = new User({
       username,
       password: hashPassword,
-      snipIds:[]
+      snipIds: []
     });
     await user.save();
     return user;
@@ -93,15 +93,10 @@ module.exports=new Promise((resolve, reject) => {
       required: true,
       ref: 'User',
     },
-    editorIds: [{
+    roleIds: [{
       type: ObjectId,
       required: true,
-      ref: 'User',
-    }],
-    readerIds: [{
-      type: ObjectId,
-      required: true,
-      ref: 'User',
+      ref: 'UserRole',
     }],
     public: {
       type: Boolean,
@@ -109,15 +104,75 @@ module.exports=new Promise((resolve, reject) => {
     },
   });
 
-  snips.statics.create=async function({name,public,_id}){
+  snips.statics.create = async function({
+    name,
+    public,
+    _id
+  }) {
     const user = await User.findById(_id);
-    const snipNames= await Promise.all(user.snipIds.map(async snipId=>(await Snip.findById(snipId)).name));
-    if(snipNames.includes(name)) throw "The user already has a snip with the name requested.";
-    const snip=new Snip({name,public,content:"//Start Snip here",ownerId:_id,editorIds:[],readerIds:[]});
-    return await new Promise((resolve, reject) => snip.save((err,snip)=>err?reject(err):resolve(snip)));
+    const snipNames = await Promise.all(user.snipIds.map(async snipId => (await Snip.findById(snipId)).name));
+    console.log(snipNames);
+    if (snipNames.includes(name)) throw "The user already has a snip with the name requested.";
+    const snip = new Snip({
+      name,
+      public,
+      content: "//Start Snip here",
+      ownerId: _id,
+      roleIds: []
+    });
+    user.snipIds = [...user.snipIds, snip._id];
+    return await new Promise((resolve, reject) => snip.save((err, snip) => err ? reject(err) : user.save((err, user) => err || !user ? reject(err) : resolve(snip))));
   };
 
-  const roleToLevel = {
+  const roleNames = ['OWNER', 'EDITOR', 'READER'];
+  const userRoles = new mongoose.Schema({
+    userId: {
+      type: ObjectId,
+      required: true,
+      ref: 'User',
+    },
+    role: {
+      type: String,
+      required: true,
+      enum: roleNames,
+    },
+  });
+
+  userRoles.methods.toNum = function() {
+    return roleNames.indexOf(this.role);
+  };
+
+  snips.methods.userHasRole = async function({
+    _id,
+    role
+  }) {
+    const roleNum = roleNames.indexOf(role);
+    return this.ownerId == _id || (await Promise.all(
+      this.roleIds.map(async roleId => (userRole => userRole.userId == _id && roleNum >= userRole.toNum())(await UserRole.findById(roleId))))).reduce((last, next) => last || next, false);
+  };
+  snips.methods.setContent = function({
+    newContent
+  }) {
+    this.content = newContent;
+    return new Promise((resolve, reject) => this.save((err, snip) => err || !snip ? reject(err) : resolve(snip)));
+  };
+  snips.methods.setUserRole = async function({
+    _id,
+    role
+  }) {
+    let existentRole = (await Promise.all(this.roleIds.map(async roleId => (role => role.userId == _id && role)(await UserRole.findById(roleId)), undefined))).filter(i => i)[0];
+    if (existentRole)
+      existentRole.role = role;
+    else
+      existentRole = new UserRole({
+        userId: _id,
+        role
+      });
+
+    this.roleIds = [...this.roleIds, existentRole];
+    return new Promise((resolve, reject) => existentRole.save((err, userRole) => err || !userRole ? reject(err) : this.save((err, snip) => err || !snip ? reject(err) : resolve(userRole))));
+  };
+  /*const roleToLevel = {
     "read": 1,
     "write": 2,
     "own": 3,
@@ -146,6 +201,7 @@ module.exports=new Promise((resolve, reject) => {
     console.log("Authorized is",isAuthorized);
     return isAuthorized;
   }
+  */
 
   db.on("error", err => reject(err));
   db.on("open", () => {
@@ -154,12 +210,14 @@ module.exports=new Promise((resolve, reject) => {
     //Model initializations go here
     User = mongoose.model('User', users);
     Snip = mongoose.model('Snip', snips);
+    UserRole = mongoose.model('UserRole', userRoles);
 
     resolve({
       models: {
         //Models go here
         User,
         Snip,
+        UserRole,
       },
       privateKey,
     });
