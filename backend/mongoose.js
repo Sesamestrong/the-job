@@ -7,6 +7,7 @@ module.exports = new Promise((resolve, reject) => {
   const SALT_ROUNDS = 12;
 
   require("dotenv").config();
+  console.log("database",process.env.DATABASE);
   const privateKey = saltshaker();
 
   mongoose.connect(process.env.DATABASE.replace(/<password>/, process.env.PASSWORD), {
