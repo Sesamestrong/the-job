@@ -111,7 +111,6 @@ module.exports = new Promise((resolve, reject) => {
   }) {
     const user = await User.findById(_id);
     const snipNames = await Promise.all(user.snipIds.map(async snipId => (await Snip.findById(snipId)).name));
-    console.log("snipNames",snipNames);
     if (snipNames.includes(name)) throw "The user already has a snip with the name requested.";
     const snip = new Snip({
       name,
@@ -161,7 +160,6 @@ module.exports = new Promise((resolve, reject) => {
     role
   }) {
     let existentRole = (await Promise.all(this.roleIds.map(async roleId => (role => role.userId+"" == _id && role)(await UserRole.findById(roleId)), undefined))).filter(i => i)[0];
-    console.log("existentRole? "+!!existentRole);
     if (existentRole)
       existentRole.role = role;
     else

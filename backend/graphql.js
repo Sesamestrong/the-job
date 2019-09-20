@@ -89,7 +89,7 @@ schema {
     throw bool ? "Not authenticated." : "Already authenticated.";
   };
   class AuthenticatedDirective extends SchemaDirectiveVisitor {
-    visitFieldDirective(field) {
+    visitFieldDefinition(field) {
       const {
         resolve = defaultFieldResolver
       } = field;
@@ -112,7 +112,7 @@ schema {
   };
 
   class RoleDirective extends SchemaDirectiveVisitor {
-    visitFieldDirective(field) {
+    visitFieldDefinition(field) {
       const {
         resolve = defaultFieldResolver
       } = field;
@@ -210,8 +210,6 @@ schema {
     UserRole: {
       user: async (root) => {
         const user = (await User.findById(root.userId));
-        console.log("root", root);
-        console.log(user);
         return user;
       },
     },
@@ -236,6 +234,10 @@ schema {
     typeDefs,
     resolvers,
     context,
+    schemaDirectives:{
+      authenticated:AuthenticatedDirective,
+      role:RoleDirective,
+    },
   });
 
   resolve((app) => server.applyMiddleware({
