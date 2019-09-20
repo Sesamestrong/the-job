@@ -7,7 +7,6 @@ module.exports = new Promise((resolve, reject) => {
   const SALT_ROUNDS = 12;
 
   require("dotenv").config();
-  console.log("database",process.env.DATABASE);
   const privateKey = saltshaker();
 
   mongoose.connect(process.env.DATABASE.replace(/<password>/, process.env.PASSWORD), {
@@ -112,7 +111,7 @@ module.exports = new Promise((resolve, reject) => {
   }) {
     const user = await User.findById(_id);
     const snipNames = await Promise.all(user.snipIds.map(async snipId => (await Snip.findById(snipId)).name));
-    console.log(snipNames);
+    console.log("snipNames",snipNames);
     if (snipNames.includes(name)) throw "The user already has a snip with the name requested.";
     const snip = new Snip({
       name,
@@ -161,16 +160,19 @@ module.exports = new Promise((resolve, reject) => {
     _id,
     role
   }) {
-    let existentRole = (await Promise.all(this.roleIds.map(async roleId => (role => role.userId == _id && role)(await UserRole.findById(roleId)), undefined))).filter(i => i)[0];
+    let existentRole = (await Promise.all(this.roleIds.map(async roleId => (role => role.userId+"" == _id && role)(await UserRole.findById(roleId)), undefined))).filter(i => i)[0];
+    console.log("existentRole? "+!!existentRole);
     if (existentRole)
       existentRole.role = role;
     else
+    {
       existentRole = new UserRole({
         userId: _id,
         role
       });
+      this.roleIds = [...this.roleIds, existentRole._id];
+    }
 
-    this.roleIds = [...this.roleIds, existentRole];
     return new Promise((resolve, reject) => existentRole.save((err, userRole) => err || !userRole ? reject(err) : this.save((err, snip) => err || !snip ? reject(err) : resolve(userRole))));
   };
   /*const roleToLevel = {

@@ -5,7 +5,9 @@ module.exports = new Promise(async (resolve, reject) => {
     gql,
     SchemaDirectiveVisitor,
   } = require("apollo-server-express");
-  const {defaultFieldResolver}=require("graphql");
+  const {
+    defaultFieldResolver
+  } = require("graphql");
   const jwt = require("jsonwebtoken");
 
   const ObjectId = mongoose.Types.ObjectId;
@@ -87,10 +89,14 @@ schema {
     throw bool ? "Not authenticated." : "Already authenticated.";
   };
   class AuthenticatedDirective extends SchemaDirectiveVisitor {
-    visitFieldDirective(field){
-      const {resolve=defaultFieldResolver}=field;
-      const {isAuth=true}=this.args;
-      field.resolve=authenticated(isAuth)((...args)=>resolve.call(this,...args));
+    visitFieldDirective(field) {
+      const {
+        resolve = defaultFieldResolver
+      } = field;
+      const {
+        isAuth = true
+      } = this.args;
+      field.resolve = authenticated(isAuth)((...args) => resolve.call(this, ...args));
     }
   }
 
@@ -102,14 +108,18 @@ schema {
         _id: context._id
       }))
       return await next(root, args, context, info);
-    throw "User does not have role.";
+    throw `User does not have role ${role}.`;
   };
 
   class RoleDirective extends SchemaDirectiveVisitor {
     visitFieldDirective(field) {
-      const {resolve=defaultFieldResolver}=field;
-      const {role:roleName}=this.args;
-      field.resolve=role(roleName)((...args)=>resolve.call(this,...args));
+      const {
+        resolve = defaultFieldResolver
+      } = field;
+      const {
+        role: roleName
+      } = this.args;
+      field.resolve = role(roleName)((...args) => resolve.call(this, ...args));
     }
   }
 
@@ -191,16 +201,19 @@ schema {
       snips: (root) => Promise.all(root.snipIds.map(async snipId => await Snip.findById(snipId))),
     },
     Snip: {
-      name: role("read")((root) => root.name),
-      content: role("read")((root) => root.content),
-      owner: role("read")(async (root) => await User.findById(root.ownerId)),
+      name: role("READER")((root) => root.name),
+      content: role("READER")((root) => root.content),
+      owner: role("READER")(async (root) => await User.findById(root.ownerId)),
       //TODO fix User.findById(... returning null or undefined
-      users: role("read")(async (root) => (await Promise.all(root.roleIds.map(async roleId => await User.findById((await UserRole.findById(roleId)).userId))))),
+      users: role("READER")(async (root) => (await Promise.all(root.roleIds.map(async roleId => await UserRole.findById(roleId))))),
     },
     UserRole: {
-      user: async ({
-        userId
-      }) => (i => console.log(i) || i)(await User.findById(userId)),
+      user: async (root) => {
+        const user = (await User.findById(root.userId));
+        console.log("root", root);
+        console.log(user);
+        return user;
+      },
     },
   };
 
