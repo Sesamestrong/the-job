@@ -189,9 +189,9 @@ schema {
         }, {
           _id
         }) =>
-        await role("OWNER")((snip) => snip.setContent({
+        await role("OWNER")(async (snip) => (await snip.setContent({
           newContent
-        }))(await Snip.findById(snipId), null, {
+        })).content)(await Snip.findById(snipId), null, {
           _id
         })
       ),
