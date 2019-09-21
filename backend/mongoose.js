@@ -193,7 +193,7 @@ module.exports = new Promise((resolve, reject) => {
     console.log("Got past public");
     if(!_id) return false;
     if(_id===this.ownerId+"") return true;
-    console.log("Did not match ownwerId");
+    console.log("Did not match ownerId");
     const authorizationLevel = roleToLevel[role];
     if (!authorizationLevel) throw "Unknown role";
     const isAuthorized = false;

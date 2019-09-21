@@ -27,21 +27,21 @@ module.exports = new Promise(async (resolve, reject) => {
 
   const typeDefs = gql `
 directive @role(role:Role) on FIELD_DEFINITION
-directive @authenticated(iAuth:Boolean) on FIELD_DEFINITION
+directive @authenticated(isAuth:Boolean) on FIELD_DEFINITION
 
 type Query {
   me: User
   user(username: String!): User
   validate(username: String!, password: String!): String
   snip(id: String!): Snip
-  snips(query: SnipQuery): [Snip!]!
+  snips(query: SnipQuery!): [Snip]!
 }
 
 type Mutation{
-  newUser(username: String!, password: String!): String
-  newSnip(name: String!, public:Boolean!): Snip
-  setUserRole(snipId:String!,username:String!,role:Role): UserRole
-  setSnipContent(snipId:String!,newContent:String!): String
+  newUser(username: String!, password: String!): String @authenticated(isAuth:false)
+  newSnip(name: String!, public:Boolean!): Snip @authenticated(isAuth:true)
+  setUserRole(snipId:String!,username:String!,role:Role): UserRole @authenticated(isAuth:true)
+  setSnipContent(snipId:String!,newContent:String!): String @authenticated(isAuth:true)
 }
 
 type User {
@@ -62,11 +62,11 @@ type UserRole {
 
 type Snip {
   id: String!
-  name: String!
-  content: String!
-  owner: User!
+  name: String! @role(role:READER)
+  content: String! @role(role:READER)
+  owner: User! @role(role:READER)
   public: Boolean!
-  users:[UserRole!]!
+  users:[UserRole!]! @role(role:READER)
 }
 input SnipQuery {
   name: String
@@ -125,7 +125,7 @@ schema {
 
   const resolvers = {
     Query: {
-      me: authenticated()(async (_, args, {
+      me: (async (_, args, {
         _id
       }) => await User.findById(_id)),
       user: async (_, {
@@ -144,10 +144,10 @@ schema {
       snip: async (root, {
         id
       }) => await Snip.findById(id),
-      snips: async (root) => await Snip.find(),
+      snips: async (root,{query:{name}},{_id}) => (await Promise.all((await Snip.find(graphqlToMongoose({name}))).map(snip=>snip.userHasRole({role:"READER",_id})?snip:null))).filter(i=>i),
     },
     Mutation: {
-      newUser: authenticated(false)(async (_, {
+      newUser: (async (_, {
           username,
           password
         }) =>
@@ -155,7 +155,7 @@ schema {
           username,
           password
         })).genToken()),
-      newSnip: authenticated()((_, {
+      newSnip: ((_, {
           name,
           public
         }, {
@@ -166,7 +166,7 @@ schema {
           public,
           _id
         })),
-      setUserRole: authenticated(true)(async (_, {
+      setUserRole: (async (_, {
           snipId,
           username,
           role: roleName
@@ -183,7 +183,7 @@ schema {
           _id
         })
       ),
-      setSnipContent: authenticated(true)(async (_, {
+      setSnipContent: (async (_, {
           snipId,
           newContent
         }, {
@@ -201,17 +201,14 @@ schema {
       snips: (root) => Promise.all(root.snipIds.map(async snipId => await Snip.findById(snipId))),
     },
     Snip: {
-      name: role("READER")((root) => root.name),
-      content: role("READER")((root) => root.content),
-      owner: role("READER")(async (root) => await User.findById(root.ownerId)),
+      owner: (async (root) => await User.findById(root.ownerId)),
       //TODO fix User.findById(... returning null or undefined
-      users: role("READER")(async (root) => (await Promise.all(root.roleIds.map(async roleId => await UserRole.findById(roleId))))),
+      users: (async (root) => (await Promise.all(root.roleIds.map(async roleId => await UserRole.findById(roleId))))),
     },
     UserRole: {
-      user: async (root) => {
-        const user = (await User.findById(root.userId));
-        return user;
-      },
+      user: async (root) => 
+        await User.findById(root.userId)
+      ,
     },
   };
 
